@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Bus3DProject/Bus3DProject.vcxproj" Id="437b265a-fb32-441f-84ea-b9407100a159" />
+</Solution>
