@@ -36,6 +36,7 @@ unsigned stationTexture;
 unsigned closedIconTexture;
 unsigned openIconTexture;
 unsigned controlIconTexture;
+unsigned imeTexture;
 unsigned int colorShader2D;
 unsigned int rectShader2D;
 
@@ -52,6 +53,9 @@ int passengersNumber = 0;
 int punishmentNumber = 0;
 bool showControls = false;
 double lastTime;
+float doorAngle = 0.0f;
+const float DOOR_OPEN_ANGLE = 90.0f;
+const float DOOR_ANIMATION_SPEED = 120.0f;
 
 // Funkcije (Prototipi)
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -62,95 +66,95 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 // --- 2D SIMULATION HELPER FUNCTIONS ---
 void preprocessTexture(unsigned& texture, const char* filepath) {
-    texture = loadImageToTexture(filepath);
-    if (texture != 0) {
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
+	texture = loadImageToTexture(filepath);
+	if (texture != 0) {
+		glBindTexture(GL_TEXTURE_2D, texture);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
 }
 
 void formVAOTextured2D(float* vertices, size_t size, unsigned int& VAO) {
-    unsigned int VBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, size, vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+	unsigned int VBO;
+	glGenVertexArrays(1, &VAO);
+	glGenBuffers(1, &VBO);
+	glBindVertexArray(VAO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, size, vertices, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
 }
 
 void formVAOPosition2D(std::vector<float> vertices, size_t size, unsigned int& VAO) {
-    unsigned int VBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, size, vertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+	unsigned int VBO;
+	glGenVertexArrays(1, &VAO);
+	glGenBuffers(1, &VBO);
+	glBindVertexArray(VAO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, size, vertices.data(), GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
 }
 
 float randomOffset(float range) {
-    return (float(rand()) / RAND_MAX * 2.0f - 1.0f) * range;
+	return (float(rand()) / RAND_MAX * 2.0f - 1.0f) * range;
 }
 
 void drawPath(unsigned int shader, unsigned int VAO, int numPoints) {
-    glUseProgram(shader);
-    glUniform4f(glGetUniformLocation(shader, "uColor"), 1.0f, 0.0f, 0.0f, 1.0f);
-    glUniform2f(glGetUniformLocation(shader, "uPosOffset"), 0.0f, 0.0f);
-    glLineWidth(10.0f);
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_LINE_LOOP, 0, numPoints);
-    glBindVertexArray(0);
+	glUseProgram(shader);
+	glUniform4f(glGetUniformLocation(shader, "uColor"), 1.0f, 0.0f, 0.0f, 1.0f);
+	glUniform2f(glGetUniformLocation(shader, "uPosOffset"), 0.0f, 0.0f);
+	glLineWidth(10.0f);
+	glBindVertexArray(VAO);
+	glDrawArrays(GL_LINE_LOOP, 0, numPoints);
+	glBindVertexArray(0);
 }
 
 void drawStations2D(unsigned int shader, unsigned int VAO, float* positions, int num) {
-    glUseProgram(shader);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, stationTexture);
-    glBindVertexArray(VAO);
-    for (int i = 0; i < num; ++i) {
-        glUniform1f(glGetUniformLocation(shader, "uX"), positions[2 * i]);
-        glUniform1f(glGetUniformLocation(shader, "uY"), positions[2 * i + 1]);
-        glUniform1f(glGetUniformLocation(shader, "uS"), STATION_SCALE);
-        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    }
-    glBindVertexArray(0);
+	glUseProgram(shader);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, stationTexture);
+	glBindVertexArray(VAO);
+	for (int i = 0; i < num; ++i) {
+		glUniform1f(glGetUniformLocation(shader, "uX"), positions[2 * i]);
+		glUniform1f(glGetUniformLocation(shader, "uY"), positions[2 * i + 1]);
+		glUniform1f(glGetUniformLocation(shader, "uS"), STATION_SCALE);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	}
+	glBindVertexArray(0);
 }
 
 void drawBus2D(unsigned int shader, unsigned int VAO, float x, float y) {
-    glUseProgram(shader);
-    glUniform1f(glGetUniformLocation(shader, "uX"), x);
-    glUniform1f(glGetUniformLocation(shader, "uY"), y);
-    glUniform1f(glGetUniformLocation(shader, "uS"), BUS_SCALE);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, busTexture);
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    glBindVertexArray(0);
+	glUseProgram(shader);
+	glUniform1f(glGetUniformLocation(shader, "uX"), x);
+	glUniform1f(glGetUniformLocation(shader, "uY"), y);
+	glUniform1f(glGetUniformLocation(shader, "uS"), BUS_SCALE);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, busTexture);
+	glBindVertexArray(VAO);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
 }
 
 void drawIcon2D(unsigned int shader, unsigned int VAO, unsigned int tex, float x, float y, float scale) {
-    glUseProgram(shader);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glUniform1f(glGetUniformLocation(shader, "uX"), x);
-    glUniform1f(glGetUniformLocation(shader, "uY"), y);
-    glUniform1f(glGetUniformLocation(shader, "uS"), scale);
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    glBindVertexArray(0);
+	glUseProgram(shader);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glUniform1f(glGetUniformLocation(shader, "uX"), x);
+	glUniform1f(glGetUniformLocation(shader, "uY"), y);
+	glUniform1f(glGetUniformLocation(shader, "uS"), scale);
+	glBindVertexArray(VAO);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glBindVertexArray(0);
 }
 
 int main() {
@@ -221,6 +225,10 @@ int main() {
 	preprocessTexture(closedIconTexture, "res/zatvorena.png");
 	preprocessTexture(openIconTexture, "res/otvorena.png");
 	preprocessTexture(controlIconTexture, "res/kontrola.png");
+	preprocessTexture(imeTexture, "res/ime.png");
+	if (imeTexture == 0) {
+		std::cerr << "GREŠKA: Nije moguće učitati res/ime.png!" << std::endl;
+	}
 
 	// === SETUP 2D SIMULATION DATA ===
 	const int NUM_STATIONS = 10;
@@ -292,13 +300,32 @@ int main() {
 		-2.0f, 0.0f,  2.0f, -2.0f, 0.0f, -5.0f, -2.0f, 3.0f, -5.0f, -2.0f, 3.0f,  2.0f,
 		// 12-15: DESNI ZID
 		 2.0f, 0.0f,  2.0f,  2.0f, 0.0f, -5.0f,  2.0f, 3.0f, -5.0f,  2.0f, 3.0f,  2.0f,
-		// 16-19: ŠOFERŠAJBNA
-		-2.0f, 0.0f, -5.0f,  2.0f, 0.0f, -5.0f,  2.0f, 3.0f, -5.0f, -2.0f, 3.0f, -5.0f,
-		// 20-23: KONTROLNA TABLA (sa teksturnim koordinatama)
-		-0.8f, 0.8f, -2.0f, 0.0f, 1.0f,  // Gornja leva
-		 0.8f, 0.8f, -2.0f, 1.0f, 1.0f,  // Gornja desna
-		 0.8f, 0.0f, -2.0f, 1.0f, 0.0f,  // Donja desna
-		-0.8f, 0.0f, -2.0f, 0.0f, 0.0f   // Donja leva
+		 // 16-19: ŠOFERŠAJBNA
+		 -2.0f, 0.0f, -5.0f,  2.0f, 0.0f, -5.0f,  2.0f, 3.0f, -5.0f, -2.0f, 3.0f, -5.0f,
+		 // 20-23: KONTROLNA TABLA (donji centar ispred šoferšajbne)
+		 -0.6f, 0.9f, -4.0f, 0.0f, 1.0f,  // Gornja leva
+		  0.6f, 0.9f, -4.0f, 1.0f, 1.0f,  // Gornja desna
+		  0.6f, 0.3f, -4.0f, 1.0f, 0.0f,  // Donja desna
+		 -0.6f, 0.3f, -4.0f, 0.0f, 0.0f   // Donja leva
+	};
+
+	// Door vertices (on right wall, positioned at x=2.0f)
+	float doorVertices[] = {
+		// Door positioned with height 2.0 and width 1.2
+		0.0f, 0.0f,  0.0f,  // Bottom back (hinge)
+		0.0f, 2.0f,  0.0f,  // Top back (hinge)
+		0.0f, 2.0f, -1.2f,  // Top front
+		0.0f, 0.0f, -1.2f   // Bottom front
+	};
+
+	// Image vertices (on back windshield, centered with texture coordinates)
+	float imageVertices[] = {
+		// Position (x, y, z), Texture coords (u, v)
+		// Centered on windshield, size: 2.0 width x 1.0 height
+		-1.0f, 2.5f, -4.99f,  0.0f, 1.0f,  // Top left
+		-1.0f, 1.5f, -4.99f,  0.0f, 0.0f,  // Bottom left
+		 1.0f, 1.5f, -4.99f,  1.0f, 0.0f,  // Bottom right
+		 1.0f, 2.5f, -4.99f,  1.0f, 1.0f   // Top right
 	};
 
 	unsigned int indices[] = {
@@ -311,6 +338,14 @@ int main() {
 
 	unsigned int controlIndices[] = {
 		0, 1, 2, 2, 3, 0           // Kontrolna tabla
+	};
+
+	unsigned int doorIndices[] = {
+		0, 1, 2, 2, 3, 0           // Door
+	};
+
+	unsigned int imageIndices[] = {
+		0, 1, 2, 2, 3, 0           // Image quad
 	};
 
 	// VAO for cabin
@@ -347,6 +382,40 @@ int main() {
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
 
+	// VAO for door
+	unsigned int VAOdoor, VBOdoor, EBOdoor;
+	glGenVertexArrays(1, &VAOdoor);
+	glGenBuffers(1, &VBOdoor);
+	glGenBuffers(1, &EBOdoor);
+
+	glBindVertexArray(VAOdoor);
+	glBindBuffer(GL_ARRAY_BUFFER, VBOdoor);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(doorVertices), doorVertices, GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOdoor);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(doorIndices), doorIndices, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+
+	// VAO for image (with texture coordinates)
+	unsigned int VAOimage, VBOimage, EBOimage;
+	glGenVertexArrays(1, &VAOimage);
+	glGenBuffers(1, &VBOimage);
+	glGenBuffers(1, &EBOimage);
+
+	glBindVertexArray(VAOimage);
+	glBindBuffer(GL_ARRAY_BUFFER, VBOimage);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(imageVertices), imageVertices, GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOimage);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(imageIndices), imageIndices, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+
 	glBindVertexArray(0);
 
 	// --- RENDER PETLJA ---
@@ -357,6 +426,20 @@ int main() {
 		double currentTime = glfwGetTime();
 		float deltaTime = (float)(currentTime - lastTime);
 		lastTime = currentTime;
+
+		// Update door animation
+		if (isWaiting) {
+			if (doorAngle < DOOR_OPEN_ANGLE) {
+				doorAngle += DOOR_ANIMATION_SPEED * deltaTime;
+				if (doorAngle > DOOR_OPEN_ANGLE) doorAngle = DOOR_OPEN_ANGLE;
+			}
+		}
+		else {
+			if (doorAngle > 0.0f) {
+				doorAngle -= DOOR_ANIMATION_SPEED * deltaTime;
+				if (doorAngle < 0.0f) doorAngle = 0.0f;
+			}
+		}
 
 		if (isWaiting) {
 			waitTimer += deltaTime;
@@ -458,6 +541,31 @@ int main() {
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 		glBindVertexArray(0);
 
+		// Draw door with rotation animation
+		glUseProgram(shaderProgram);
+		glm::mat4 doorModel = glm::mat4(1.0f);
+		doorModel = glm::translate(doorModel, glm::vec3(2.0f, 0.0f, -1.0f)); // Position door on right wall
+		doorModel = glm::rotate(doorModel, glm::radians(doorAngle), glm::vec3(0.0f, 1.0f, 0.0f)); // Rotate around hinge
+		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(doorModel));
+		glUniform3f(glGetUniformLocation(shaderProgram, "color"), 0.4f, 0.2f, 0.0f); // Brown color
+		glUniform1f(glGetUniformLocation(shaderProgram, "alpha"), 1.0f);
+		glBindVertexArray(VAOdoor);
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+
+		// Draw image in center of bus (opaque)
+		glUseProgram(textureShader);
+		glm::mat4 imageModel = glm::mat4(1.0f);
+		glUniformMatrix4fv(glGetUniformLocation(textureShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		glUniformMatrix4fv(glGetUniformLocation(textureShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(glGetUniformLocation(textureShader, "model"), 1, GL_FALSE, glm::value_ptr(imageModel));
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, imeTexture);
+		glUniform1i(glGetUniformLocation(textureShader, "screenTexture"), 0);
+		glBindVertexArray(VAOimage);
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
@@ -466,6 +574,8 @@ int main() {
 	glDeleteTextures(1, &textureColorbuffer);
 	glDeleteVertexArrays(1, &VAO);
 	glDeleteVertexArrays(1, &VAOcontrol);
+	glDeleteVertexArrays(1, &VAOdoor);
+	glDeleteVertexArrays(1, &VAOimage);
 	glDeleteVertexArrays(1, &VAObus2D);
 	glDeleteVertexArrays(1, &VAOstation2D);
 	glDeleteVertexArrays(1, &VAOpath2D);
@@ -509,44 +619,44 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 // Obrada miša (Pogled vozača)
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
+	float xpos = static_cast<float>(xposIn);
+	float ypos = static_cast<float>(yposIn);
 
-    if (firstMouse) {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
+	if (firstMouse) {
+		lastX = xpos;
+		lastY = ypos;
+		firstMouse = false;
+	}
 
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos;
-    lastX = xpos;
-    lastY = ypos;
+	float xoffset = xpos - lastX;
+	float yoffset = lastY - ypos;
+	lastX = xpos;
+	lastY = ypos;
 
-    float sensitivity = 0.1f;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
+	float sensitivity = 0.1f;
+	xoffset *= sensitivity;
+	yoffset *= sensitivity;
 
-    yaw += xoffset;
-    pitch += yoffset;
+	yaw += xoffset;
+	pitch += yoffset;
 
-    // --- OGRANIČENJA SPECIFIKACIJE ---
-    // 1. Gore/Dole (Y osa) - max 180 stepeni ukupno, ovde +-89 za stabilnost
-    if (pitch > 89.0f) pitch = 89.0f;
-    if (pitch < -89.0f) pitch = -89.0f;
+	// --- OGRANIČENJA SPECIFIKACIJE ---
+	// 1. Gore/Dole (Y osa) - max 180 stepeni ukupno, ovde +-89 za stabilnost
+	if (pitch > 89.0f) pitch = 89.0f;
+	if (pitch < -89.0f) pitch = -89.0f;
 
-    // 2. Levo/Desno - 180 stepeni (od -180 do 0, gde je -90 centar)
-    if (yaw > 0.0f) yaw = 0.0f;
-    if (yaw < -180.0f) yaw = -180.0f;
+	// 2. Levo/Desno - 180 stepeni (od -180 do 0, gde je -90 centar)
+	if (yaw > 0.0f) yaw = 0.0f;
+	if (yaw < -180.0f) yaw = -180.0f;
 
-    glm::vec3 front;
-    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front.y = sin(glm::radians(pitch));
-    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    cameraFront = glm::normalize(front);
+	glm::vec3 front;
+	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+	front.y = sin(glm::radians(pitch));
+	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+	cameraFront = glm::normalize(front);
 }
 
 // Promena veličine prozora
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
-    glViewport(0, 0, width, height);
+	glViewport(0, 0, width, height);
 }
